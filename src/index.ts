@@ -1,6 +1,7 @@
 import express, { Application, Request, Response } from 'express';
 import tokens from "../tokens.json";
-import { Token, totalSupplpy } from './token';
+import { circulating_supply, Token } from './token';
+import { ethers } from 'ethers';
 const app: Application = express();
 const port = 8080;
 
@@ -17,8 +18,9 @@ app.get('/:ticker/circulating',async(req:Request,res:Response)=>{
         {error:"400",
          message:"token ticker not support.Is case sensitive make sure is match"   
         })
-    let _totalSupplpy = await totalSupplpy(token);
-    return res.status(200).json({"circulating_supply":_totalSupplpy.toString()})
+    let _circulating  = await circulating_supply(token);
+
+    return res.status(200).json({"circulating_supply":ethers.formatEther(_circulating)})
   }catch(err){
     return res.status(400).json(
       {error:"400",

@@ -49,6 +49,5 @@ if brc20-token is not fully minted set to __`true`__ will automaticaly be flagge
             "56":false,
             "btc":false
       }
-  },
-  ...
+  }
 }

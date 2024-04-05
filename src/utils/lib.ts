@@ -13,6 +13,11 @@ export const rpc_provider =(chain:ChainId)=>{
     return provider
 }
 
+/**
+ * 
+ * @param fn function to cache
+ * @returns caches instance of the function use for performance upgrades to expensive funtions
+ */
 export function memoize<T extends (...args: any[]) => any>(fn: T): T {
     const cache = new Map<string, ReturnType<T>>();
     return function (...args: Parameters<T>): ReturnType<T> {
@@ -27,4 +32,24 @@ export function memoize<T extends (...args: any[]) => any>(fn: T): T {
   
       return result;
     } as T;
+}
+
+/**
+ * 
+ * @param arr array of values single or multidimen
+ * @returns sum of all values and nested values
+ */
+export function flattSum(arr: any[]): number |bigint {
+    let sum = BigInt(0);
+    function traverse(subArr: any[]) {
+      for (const element of subArr) {
+        if (Array.isArray(element)) {
+          traverse(element);
+        } else {
+          sum += element;
+        }
+      }
+    }
+    traverse(arr);
+    return sum;
 }
