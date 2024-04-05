@@ -30,7 +30,7 @@ app.get('/:ticker/circulating',async(req:Request,res:Response)=>{
         })
     let _circulating  = await circulating_supply(token);
 
-    return res.status(200).json({"result":ethers.formatEther(_circulating)})
+    return res.status(200).json({"circulating_supply":ethers.formatEther(_circulating)})
   }catch(err){
     return res.status(400).json(
       {error:"400",
