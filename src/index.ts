@@ -1,10 +1,20 @@
 import express, { Application, Request, Response } from 'express';
 import tokens from "../tokens.json";
+import { rateLimit } from 'express-rate-limit'
 import { circulating_supply, Token } from './token';
 import { ethers } from 'ethers';
 const app: Application = express();
 const port = 8080;
 
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	limit:15, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	standardHeaders: 'draft-7', // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+	// store: ... , // Redis, Memcached, etc. See below.
+})
+
+app.use(limiter)
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, TypeScript Express!');
 });
@@ -20,7 +30,7 @@ app.get('/:ticker/circulating',async(req:Request,res:Response)=>{
         })
     let _circulating  = await circulating_supply(token);
 
-    return res.status(200).json({"circulating_supply":ethers.formatEther(_circulating)})
+    return res.status(200).json({"result":ethers.formatEther(_circulating)})
   }catch(err){
     return res.status(400).json(
       {error:"400",
