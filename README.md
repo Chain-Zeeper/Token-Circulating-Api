@@ -45,7 +45,7 @@ The `tokens.json` file contains the token configuration. For each token, you can
 `watch` specifies the address to sub from total supply
 `flexible_supply` __`false`__ by default is used if token has flexible supply.
 if brc20-token is not fully minted set to __`true`__ .Will automaticaly be flagged false internally if fully minted
-`burn_or_bridge` address where certain funds were burned to or locked permanenly in bridge. Is optional 
+`burn_or_bridge` address where certain funds were burned to or locked permanently in bridge as funds. Is optional 
 ```json
 {
   "O4DX": {
