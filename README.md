@@ -24,6 +24,19 @@ Retrieves the circulating supply of a specific token.
       "circulating_supply": 1272.4545
     }
     ```
+### 2. Get Total Supply
+- **URL:** `/:ticker/total-supply`
+- **Method:** GET
+- **Path Parameters:**
+  - `ticker` (string, required): The ticker symbol of the token, as specified in `tokens.json`.
+- **Response:**
+  - Status Code: 200 (OK)
+  - Body:
+    ```json
+    {
+      "total_supply": 200000000
+    }
+    ```
 
 ## `tokens.json` Format
 
