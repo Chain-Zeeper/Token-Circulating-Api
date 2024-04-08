@@ -55,5 +55,5 @@ var ShortStrings__factory_1 = require("./factories/@openzeppelin/contracts/utils
 Object.defineProperty(exports, "ShortStrings__factory", { enumerable: true, get: function () { return ShortStrings__factory_1.ShortStrings__factory; } });
 var Strings__factory_1 = require("./factories/@openzeppelin/contracts/utils/Strings__factory");
 Object.defineProperty(exports, "Strings__factory", { enumerable: true, get: function () { return Strings__factory_1.Strings__factory; } });
-var MyToken__factory_1 = require("./factories/contracts/ERC20.sol/MyToken__factory");
+var MyToken__factory_1 = require("./factories/contracts/Lock.sol/MyToken__factory");
 Object.defineProperty(exports, "MyToken__factory", { enumerable: true, get: function () { return MyToken__factory_1.MyToken__factory; } });
