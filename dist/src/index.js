@@ -9,7 +9,7 @@ const express_rate_limit_1 = require("express-rate-limit");
 const token_1 = require("./token");
 const ethers_1 = require("ethers");
 const app = (0, express_1.default)();
-const port = 8080;
+const port = 3001;
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 15 * 60 * 1000, // 15 minutes
     limit: 15, // Limit each IP to 100 requests per `window` (here, per 15 minutes).

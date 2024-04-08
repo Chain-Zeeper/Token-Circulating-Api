@@ -4,7 +4,7 @@ import { rateLimit } from 'express-rate-limit'
 import { circulating_supply, Token } from './token';
 import { ethers } from 'ethers';
 const app: Application = express();
-const port = 8080;
+const port = 3001;
 
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
