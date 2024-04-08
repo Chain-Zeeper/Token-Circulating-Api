@@ -18,14 +18,17 @@ export type Token ={
     flexible_supply?:{
         [key in ChainId]?:boolean
     }
+    burn_or_bridge?:{
+        [key in ChainId]?:string[]
+    }
 }
 
 /**
  * 
  * @param token 
- * @returns total suppply at time of calling the contract
+ * @returns max suppply possible regardless of architecture or burned amt in wei 1e18
  */
-async function total_supply(token:Token){
+async function max_supply(token:Token){
     let _total = BigInt(0)
     const amounts =await Promise.all(token.chains.map(async (chain:ChainId)=>{
         let address = token.address[chain]
@@ -47,6 +50,37 @@ async function total_supply(token:Token){
         _total += BigInt(value);
     }
     return _total
+}
+
+async function total_supply(token:Token){
+    let _max_supply = max_supply(token)
+    const amounts = await Promise.all(token.chains.map(async (chain:ChainId)=>{
+        let address = token.address[chain]
+        if(!address) throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`)
+        if(Number.isNaN(Number(chain))){
+            let addressToWatch = token.burn_or_bridge?.[chain]  
+            if(chain=='btc'){          
+                if(addressToWatch){
+                   return await BRC20BalanceBatch(address,addressToWatch)
+                }
+
+            }
+            else{
+                throw Error("only btc non evm chain supported")
+            }
+        }
+        else{  
+            let addressToWatch = token.burn_or_bridge?.[chain]  
+            if(addressToWatch){
+                return await ERC20BatchBalances(address,addressToWatch,chain)
+            }
+            
+        }      
+    }))
+    const total = flattSum(amounts) as bigint
+    console.log(amounts)
+    const _total_supply = (await _max_supply )- total
+    return _total_supply
 }
 
 /**
@@ -135,6 +169,7 @@ async function circulating_supply(token:Token){
         }      
     }))
     const total = flattSum(amounts) as bigint
+
     const circulating = (await __totalSupply )- total
     return circulating
 }
