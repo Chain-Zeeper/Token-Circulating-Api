@@ -12,23 +12,35 @@ export const rpc_provider =(chain:ChainId)=>{
     let provider = new ethers.JsonRpcProvider(rpcurl,Number(chain))
     return provider
 }
-
+const expiryMinutes = 60 // expiry in minutes
 /**
  * 
  * @param fn function to cache
  * @returns caches instance of the function use for performance upgrades to expensive funtions
  */
 export function memoize<T extends (...args: any[]) => any>(fn: T): T {
-    const cache = new Map<string, ReturnType<T>>();
+    const cache = new Map<string, {
+      value:ReturnType<T>
+      expiry:number}
+      >();
+    const now = Date.now();
     return function (...args: Parameters<T>): ReturnType<T> {
       const key = `${fn.name}${JSON.stringify(args)}`;
   
       if (cache.has(key)) {
-        return cache.get(key) as ReturnType<T>;
+        const cached = cache.get(key)!;
+        if (now < cached.expiry) {
+          return cached.value;
+        } else {
+          cache.delete(key);
+        }
       }
   
       const result = fn(...args);
-      cache.set(key, result);
+      cache.set(key, {
+        value:result,
+        expiry: now + expiryMinutes *60 *1000
+      });
   
       return result;
     } as T;
