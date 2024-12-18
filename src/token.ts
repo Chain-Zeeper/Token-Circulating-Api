@@ -5,6 +5,10 @@ import { response } from "express";
 import { flattSum, memoize, rpc_provider } from "./utils/lib";
 import tokens from "../tokens.json"
 import { token } from "../typechain-types/@openzeppelin/contracts";
+import TonWeb from "tonweb";
+import { fromNano } from "@ton/core";
+
+
 
 export type Token ={
     name:String
@@ -37,6 +41,9 @@ async function max_supply(token:Token){
             if(chain=='btc'){             
                 return  await get_BRC20_supply(address)
             }
+            else if(chain =='ton'){
+                return await get_jetton_suppply(address)
+            }
             else{
                 throw Error("only btc non evm chain supported")
             }
@@ -59,11 +66,18 @@ async function total_supply(token:Token){
         if(!address) throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`)
         if(Number.isNaN(Number(chain))){
             let addressToWatch = token.burn_or_bridge?.[chain]  
+            
             if(chain=='btc'){          
                 if(addressToWatch){
+                
                    return await BRC20BalanceBatch(address,addressToWatch)
                 }
-
+                
+            }
+            else if(chain =='ton'){
+                if(addressToWatch){   
+                    return  await JettonBalanceBatch(addressToWatch)
+                }
             }
             else{
                 throw Error("only btc non evm chain supported")
@@ -77,8 +91,11 @@ async function total_supply(token:Token){
             
         }      
     }))
-    const total = flattSum(amounts) as bigint
-    console.log(amounts)
+    let total = 0n
+    if(amounts){
+        total = flattSum(amounts) as bigint
+    }
+
     const _total_supply = (await _max_supply )- total
     return _total_supply
 }
@@ -127,6 +144,20 @@ async function BRC20Balance(ticker:string,wallet:string):Promise<BigInt>{
 
 /**
  * 
+ * @param ticker brc20 ticker
+ * @param wallet 
+ * @returns balance of brc20 token  in bitcoin chain scaled to 10^18
+ */
+async function JettonBalance(address:string):Promise<BigInt>{
+    const tonweb = new TonWeb(new TonWeb.HttpProvider(rpcProviders[ChainId.TON]))
+    const jettonWallet = new TonWeb.token.jetton.JettonWallet(tonweb.provider, { address:address} as any);
+    const data = await jettonWallet.getData();
+    const supply =ethers.parseUnits(fromNano(data.balance.toString()))
+    return supply
+}
+
+/**
+ * 
  * @param ticker 
  * @param wallets 
  * @returns array of brc20 balances 
@@ -134,6 +165,18 @@ async function BRC20Balance(ticker:string,wallet:string):Promise<BigInt>{
 async function BRC20BalanceBatch(ticker:string,wallets:string[]){
     let balances = await Promise.all(wallets.map(async(wallet)=>{
         return await BRC20Balance(ticker,wallet)
+    }))
+    return balances
+}
+/**
+ * 
+ * @param ticker 
+ * @param wallets 
+ * @returns array of jetton balances 
+ */
+async function JettonBalanceBatch(wallets:string[]){
+    let balances = await Promise.all(wallets.map(async(wallet)=>{
+        return await JettonBalance(wallet)
     }))
     return balances
 }
@@ -156,6 +199,12 @@ async function circulating_supply(token:Token){
                 }
 
             }
+            else if(chain =='ton'){
+                if(addressToWatch){
+                    return await JettonBalanceBatch(addressToWatch)
+                }
+            }
+
             else{
                 throw Error("only btc non evm chain supported")
             }
@@ -268,5 +317,20 @@ async function get_BRC20_supply(ticker:string){
     }
     return minted_supply
 }
+
+async function get_jetton_suppply(address:string){
+    let totalsupply = await  _JettonSupplyCached(address)
+    return totalsupply
+}
+
+
+const _JettonSupply = async(address:string)=>{
+   const tonweb = new TonWeb(new TonWeb.HttpProvider(rpcProviders[ChainId.TON]))
+   const jettonMinter = new TonWeb.token.jetton.JettonMinter(tonweb.provider, { address:address} as any);
+   const data = await jettonMinter.getJettonData();
+   const supply =ethers.parseUnits(fromNano(data.totalSupply.toString()))
+   return supply
+}
+const _JettonSupplyCached = memoize(_JettonSupply)
 
 export {total_supply,circulating_supply,get_BRC20_supply}

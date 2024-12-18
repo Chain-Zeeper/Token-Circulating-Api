@@ -58,7 +58,10 @@ export function flattSum(arr: any[]): number |bigint {
         if (Array.isArray(element)) {
           traverse(element);
         } else {
-          sum += element;
+          if(element){
+            sum += element;
+          }
+          
         }
       }
     }

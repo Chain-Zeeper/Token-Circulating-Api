@@ -4,6 +4,7 @@ exports.get_BRC20_supply = exports.circulating_supply = exports.total_supply = v
 const ethers_1 = require("ethers");
 const typechain_types_1 = require("../typechain-types");
 const lib_1 = require("./utils/lib");
+const { default: TonWeb } = require("tonweb");
 /**
  *
  * @param token
@@ -18,6 +19,9 @@ async function total_supply(token) {
         if (Number.isNaN(Number(chain))) {
             if (chain == 'btc') {
                 return await get_BRC20_supply(address);
+            }
+            else if (chain == 'ton'){
+                return await get_jetton_supply(address)
             }
             else {
                 throw Error("only btc non evm chain supported");
@@ -194,6 +198,17 @@ const _BRC20Supply = async (ticker) => {
         throw Error(`fetch ordinals api for ${ticker} failed`);
     }
 };
+
+/**
+ * @notice only minted_supply is considered part of supply do not use for max_supply fetch
+ * @param address
+ * @returns max supply of jetton in wei for interop with erc20 also returs true falg to indita if fully minted
+ */
+const _JettonSupply = async (address) => {
+   const tonweb = new TonWeb()
+   const jettonMinter = new TonWeb.token.jetton.JettonMinter(tonweb.provider, {address:address});
+  
+};
 const _BRC20SupplyCached = (0, lib_1.memoize)(_BRC20Supply);
 async function get_BRC20_supply(ticker) {
     let { minted_supply, fullMint } = await _BRC20SupplyCached(ticker);
@@ -204,3 +219,14 @@ async function get_BRC20_supply(ticker) {
     return minted_supply;
 }
 exports.get_BRC20_supply = get_BRC20_supply;
+
+const _JettonSupplyCached = (0, lib_1.memoize)(_JettonSupply);
+async function get_jetton_supply(ticker) {
+    let { minted_supply, fullMint } = await _BRC20SupplyCached(ticker);
+    if (fullMint) {
+        minted_supply = await _BRC20Supply(ticker);
+        return minted_supply;
+    }
+    return minted_supply;
+}
+exports.get_jetton_supply = get_BRC20_supply;
