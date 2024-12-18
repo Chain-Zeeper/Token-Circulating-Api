@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { ERC20__factory } from "../typechain-types";
-import { ChainId, rpcProviders } from "./utils/constants";
+import { ChainId, rpcProviders, tonAPIKey } from "./utils/constants";
 import { response } from "express";
 import { flattSum, memoize, rpc_provider } from "./utils/lib";
 import tokens from "../tokens.json"
@@ -149,7 +149,7 @@ async function BRC20Balance(ticker:string,wallet:string):Promise<BigInt>{
  * @returns balance of brc20 token  in bitcoin chain scaled to 10^18
  */
 async function JettonBalance(address:string):Promise<BigInt>{
-    const tonweb = new TonWeb(new TonWeb.HttpProvider(rpcProviders[ChainId.TON]))
+    const tonweb = new TonWeb(new TonWeb.HttpProvider(rpcProviders[ChainId.TON],{apiKey:tonAPIKey}))
     const jettonWallet = new TonWeb.token.jetton.JettonWallet(tonweb.provider, { address:address} as any);
     const data = await jettonWallet.getData();
     const supply =ethers.parseUnits(fromNano(data.balance.toString()))
@@ -325,7 +325,7 @@ async function get_jetton_suppply(address:string){
 
 
 const _JettonSupply = async(address:string)=>{
-   const tonweb = new TonWeb(new TonWeb.HttpProvider(rpcProviders[ChainId.TON]))
+   const tonweb = new TonWeb(new TonWeb.HttpProvider(rpcProviders[ChainId.TON],{apiKey:tonAPIKey}))
    const jettonMinter = new TonWeb.token.jetton.JettonMinter(tonweb.provider, { address:address} as any);
    const data = await jettonMinter.getJettonData();
    const supply =ethers.parseUnits(fromNano(data.totalSupply.toString()))

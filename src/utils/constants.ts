@@ -11,3 +11,4 @@ export const rpcProviders = {
     [ChainId.BTC]: process.env.RPC_BTC || "",
     [ChainId.TON]: process.env.RPC_TON || "https://toncenter.com/api/v2/jsonRPC"
 }
+export const tonAPIKey = process.env.TON_CENTER_API_KEY || ''
