@@ -17,6 +17,7 @@ const rpc_provider = (chain) => {
     return provider;
 };
 exports.rpc_provider = rpc_provider;
+const expiryMinutes = 60; // expiry in minutes
 /**
  *
  * @param fn function to cache
@@ -24,13 +25,23 @@ exports.rpc_provider = rpc_provider;
  */
 function memoize(fn) {
     const cache = new Map();
+    const now = Date.now();
     return function (...args) {
         const key = `${fn.name}${JSON.stringify(args)}`;
         if (cache.has(key)) {
-            return cache.get(key);
+            const cached = cache.get(key);
+            if (now < cached.expiry) {
+                return cached.value;
+            }
+            else {
+                cache.delete(key);
+            }
         }
         const result = fn(...args);
-        cache.set(key, result);
+        cache.set(key, {
+            value: result,
+            expiry: now + expiryMinutes * 60 * 1000
+        });
         return result;
     };
 }
@@ -48,7 +59,9 @@ function flattSum(arr) {
                 traverse(element);
             }
             else {
-                sum += element;
+                if (element) {
+                    sum += element;
+                }
             }
         }
     }

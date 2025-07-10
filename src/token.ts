@@ -7,8 +7,8 @@ import tokens from "../tokens.json"
 import { token } from "../typechain-types/@openzeppelin/contracts";
 import TonWeb from "tonweb";
 import { fromNano } from "@ton/core";
-
-
+import 'dotenv/config'
+const api = "https://open-api.unisat.io"
 
 export type Token ={
     name:String
@@ -39,6 +39,7 @@ async function max_supply(token:Token){
         if(!address) throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`)
         if(Number.isNaN(Number(chain))){
             if(chain=='btc'){             
+                
                 return  await get_BRC20_supply(address)
             }
             else if(chain =='ton'){
@@ -52,7 +53,6 @@ async function max_supply(token:Token){
             return  await get_ERC20_supply(token,chain)
         }      
     }))
-
     for (const value of amounts) {
         _total += BigInt(value);
     }
@@ -65,11 +65,10 @@ async function total_supply(token:Token){
         let address = token.address[chain]
         if(!address) throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`)
         if(Number.isNaN(Number(chain))){
-            let addressToWatch = token.burn_or_bridge?.[chain]  
-            
+            let addressToWatch = token.burn_or_bridge?.[chain]    
+            console.log(addressToWatch,"addressToWatch")
             if(chain=='btc'){          
-                if(addressToWatch){
-                
+                if(addressToWatch){ 
                    return await BRC20BalanceBatch(address,addressToWatch)
                 }
                 
@@ -95,8 +94,7 @@ async function total_supply(token:Token){
     if(amounts){
         total = flattSum(amounts) as bigint
     }
-
-    const _total_supply = (await _max_supply )- total
+    const _total_supply = await _max_supply - total
     return _total_supply
 }
 
@@ -128,18 +126,40 @@ async function _ERC20Balance(contract:string,chain:ChainId,wallet:string){
  * @param wallet 
  * @returns balance of brc20 token  in bitcoin chain scaled to 10^18
  */
-async function BRC20Balance(ticker:string,wallet:string):Promise<BigInt>{
-    const res = await fetch(`https://api.hiro.so/ordinals/v1/brc-20/balances/${wallet}?ticker=${ticker}`)
+async function BRC20Balance(ticker:string,wallet:string,retry?:number):Promise<BigInt>{
+    try{
+    const res = await fetch(`${api}/v1/indexer/address/${wallet}/brc20/${ticker}/info`,
+        {
+            headers:{
+            'Authorization': 'Bearer ' + process.env.UNISAT_API_KEY,
+            'Content-Type': 'application/json'
+            }
+        }
+    );
     if(res.ok){
         const data = await res.json()
-        let overall_balance = data?.results?.[0].overall_balance  
+        let overall_balance = data?.data?.overallBalance  
         if(!overall_balance) return BigInt(0)
         overall_balance = ethers.parseUnits(overall_balance,18)
         return overall_balance
     }
     else{
         throw Error(`fetch ordinals api  ${wallet} balance for ${ticker} failed`)
-    }     
+    }
+    }
+    catch(err){
+        if(retry  && retry>0){
+            let _retry = retry-=1;
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            let bal = await BRC20Balance(ticker,wallet,_retry)
+            return bal
+        }
+        throw err
+           
+
+    }
+    
+        
 }
 
 /**
@@ -164,7 +184,7 @@ async function JettonBalance(address:string):Promise<BigInt>{
  */
 async function BRC20BalanceBatch(ticker:string,wallets:string[]){
     let balances = await Promise.all(wallets.map(async(wallet)=>{
-        return await BRC20Balance(ticker,wallet)
+        return await BRC20Balance(ticker,wallet,2)
     }))
     return balances
 }
@@ -187,7 +207,7 @@ async function JettonBalanceBatch(wallets:string[]){
  * @returns return the circulating supply of toke in wei
  */
 async function circulating_supply(token:Token){
-    let __totalSupply =  total_supply(token);
+    let __totalSupply =  await total_supply(token);
     const amounts = await Promise.all(token.chains.map(async (chain:ChainId)=>{
         let address = token.address[chain]
         if(!address) throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`)
@@ -218,7 +238,6 @@ async function circulating_supply(token:Token){
         }      
     }))
     const total = flattSum(amounts) as bigint
-
     const circulating = (await __totalSupply )- total
     return circulating
 }
@@ -288,33 +307,45 @@ function get_ERC20_supply(token:Token,chain:ChainId){
  * @param ticker 
  * @returns max supply of brc20 in wei for interop with erc20 also returs true falg to indita if fully minted
  */
-const _BRC20Supply= async(ticker:String)=>{
-    const res = await fetch(`https://api.hiro.so/ordinals/v1/brc-20/tokens/${ticker}`)
-    if(res.ok){
-        const data = await res.json()
-        let minted_supply = data?.supply?.minted_supply
-        let max_supply = data?.supply?.max_supply
-        if(!minted_supply) throw Error("failed to get max_supply")
-        minted_supply = ethers.parseUnits(minted_supply,18)
-        if(max_supply === minted_supply){
-            return {minted_supply,fullMint:true}
-        }      
-        return {minted_supply}
+const _BRC20Supply= async(ticker:String,retry?:number)=>{
+    try{
+    const res = await fetch(`${api}/v1/indexer/brc20/${ticker}/info`,{
+            headers:{
+                'Authorization': 'Bearer ' + process.env.UNISAT_API_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+    
+        if (res.ok) {
+            const data = await res.json();
+            let minted_supply = ethers.parseEther(data?.data?.totalMinted);
+            // let max_supply = data?.data?.totalMinted;
+            if (!minted_supply)
+                throw Error("failed to get max_supply");
+            return { minted_supply };
+        }
+        else {
+            throw Error(`fetch ordinals api for ${ticker} failed`);
+        }
+    }catch(err){
+        if(retry  && retry>0){
+            let _retry = retry-=1;
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            let bal: { minted_supply: any } = await _BRC20Supply(ticker,_retry)
+            return bal
+        }
+        throw err
+           
+
     }
-    else{
-        throw Error(`fetch ordinals api for ${ticker} failed`)
-    }
+ 
 }
 
 const _BRC20SupplyCached = memoize(_BRC20Supply)
 
 
 async function get_BRC20_supply(ticker:string){
-    let {minted_supply, fullMint}= await  _BRC20SupplyCached(ticker)
-    if(fullMint){
-        minted_supply = await _BRC20Supply(ticker)
-        return minted_supply
-    }
+    let {minted_supply}= await  _BRC20Supply(ticker)
     return minted_supply
 }
 

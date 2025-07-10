@@ -1,16 +1,22 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.get_BRC20_supply = exports.circulating_supply = exports.total_supply = void 0;
 const ethers_1 = require("ethers");
 const typechain_types_1 = require("../typechain-types");
+const constants_1 = require("./utils/constants");
 const lib_1 = require("./utils/lib");
-const { default: TonWeb } = require("tonweb");
+const tonweb_1 = __importDefault(require("tonweb"));
+const core_1 = require("@ton/core");
+const api = "https://open-api.unisat.io"
 /**
  *
  * @param token
- * @returns total suppply at time of calling the contract
+ * @returns max suppply possible regardless of architecture or burned amt in wei 1e18
  */
-async function total_supply(token) {
+async function max_supply(token) {
     let _total = BigInt(0);
     const amounts = await Promise.all(token.chains.map(async (chain) => {
         let address = token.address[chain];
@@ -20,8 +26,8 @@ async function total_supply(token) {
             if (chain == 'btc') {
                 return await get_BRC20_supply(address);
             }
-            else if (chain == 'ton'){
-                return await get_jetton_supply(address)
+            else if (chain == 'ton') {
+                return await get_jetton_suppply(address);
             }
             else {
                 throw Error("only btc non evm chain supported");
@@ -35,6 +41,42 @@ async function total_supply(token) {
         _total += BigInt(value);
     }
     return _total;
+}
+async function total_supply(token) {
+    let _max_supply = max_supply(token);
+    const amounts = await Promise.all(token.chains.map(async (chain) => {
+        let address = token.address[chain];
+        if (!address)
+            throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`);
+        if (Number.isNaN(Number(chain))) {
+            let addressToWatch = token.burn_or_bridge?.[chain];
+            if (chain == 'btc') {
+                if (addressToWatch) {
+                    return await BRC20BalanceBatch(address, addressToWatch);
+                }
+            }
+            else if (chain == 'ton') {
+                if (addressToWatch) {
+                    return await JettonBalanceBatch(addressToWatch);
+                }
+            }
+            else {
+                throw Error("only btc non evm chain supported");
+            }
+        }
+        else {
+            let addressToWatch = token.burn_or_bridge?.[chain];
+            if (addressToWatch) {
+                return await ERC20BatchBalances(address, addressToWatch, chain);
+            }
+        }
+    }));
+    let total = 0n;
+    if (amounts) {
+        total = (0, lib_1.flattSum)(amounts);
+    }
+    const _total_supply = (await _max_supply) - total;
+    return _total_supply;
 }
 exports.total_supply = total_supply;
 /**
@@ -65,10 +107,18 @@ async function _ERC20Balance(contract, chain, wallet) {
  * @returns balance of brc20 token  in bitcoin chain scaled to 10^18
  */
 async function BRC20Balance(ticker, wallet) {
-    const res = await fetch(`https://api.hiro.so/ordinals/v1/brc-20/balances/${wallet}?ticker=${ticker}`);
+    const res = await fetch(`${api}/v1/indexer/address/${wallet}/brc20/${ticker}/info`,
+        {
+            headers:{
+            'Authorization': 'Bearer ' + process.env.UNISAT_API_KEY,
+            'Content-Type': 'application/json'
+            }
+        }
+    );
+    console.log(res,"res")
     if (res.ok) {
         const data = await res.json();
-        let overall_balance = data?.results?.[0].overall_balance;
+        let overall_balance = data?.data?.overallBalance;
         if (!overall_balance)
             return BigInt(0);
         overall_balance = ethers_1.ethers.parseUnits(overall_balance, 18);
@@ -80,6 +130,19 @@ async function BRC20Balance(ticker, wallet) {
 }
 /**
  *
+ * @param ticker brc20 ticker
+ * @param wallet
+ * @returns balance of brc20 token  in bitcoin chain scaled to 10^18
+ */
+async function JettonBalance(address) {
+    const tonweb = new tonweb_1.default(new tonweb_1.default.HttpProvider(constants_1.rpcProviders[constants_1.ChainId.TON], { apiKey: constants_1.tonAPIKey }));
+    const jettonWallet = new tonweb_1.default.token.jetton.JettonWallet(tonweb.provider, { address: address });
+    const data = await jettonWallet.getData();
+    const supply = ethers_1.ethers.parseUnits((0, core_1.fromNano)(data.balance.toString()));
+    return supply;
+}
+/**
+ *
  * @param ticker
  * @param wallets
  * @returns array of brc20 balances
@@ -87,6 +150,18 @@ async function BRC20Balance(ticker, wallet) {
 async function BRC20BalanceBatch(ticker, wallets) {
     let balances = await Promise.all(wallets.map(async (wallet) => {
         return await BRC20Balance(ticker, wallet);
+    }));
+    return balances;
+}
+/**
+ *
+ * @param ticker
+ * @param wallets
+ * @returns array of jetton balances
+ */
+async function JettonBalanceBatch(wallets) {
+    let balances = await Promise.all(wallets.map(async (wallet) => {
+        return await JettonBalance(wallet);
     }));
     return balances;
 }
@@ -106,6 +181,11 @@ async function circulating_supply(token) {
             if (chain == 'btc') {
                 if (addressToWatch) {
                     return await BRC20BalanceBatch(address, addressToWatch);
+                }
+            }
+            else if (chain == 'ton') {
+                if (addressToWatch) {
+                    return await JettonBalanceBatch(addressToWatch);
                 }
             }
             else {
@@ -181,33 +261,23 @@ function get_ERC20_supply(token, chain) {
  * @returns max supply of brc20 in wei for interop with erc20 also returs true falg to indita if fully minted
  */
 const _BRC20Supply = async (ticker) => {
-    const res = await fetch(`https://api.hiro.so/ordinals/v1/brc-20/tokens/${ticker}`);
+    const res = await fetch(`${api}/v1/indexer/brc20/${ticker}/info`,{
+        headers:{
+            'Authorization': 'Bearer ' + process.env.UNISAT_API_KEY,
+            'Content-Type': 'application/json'
+        }
+    });
     if (res.ok) {
         const data = await res.json();
-        let minted_supply = data?.supply?.minted_supply;
-        let max_supply = data?.supply?.max_supply;
+        let minted_supply = data?.data?.totalMinted;
+        // let max_supply = data?.data?.totalMinted;
         if (!minted_supply)
             throw Error("failed to get max_supply");
-        minted_supply = ethers_1.ethers.parseUnits(minted_supply, 18);
-        if (max_supply === minted_supply) {
-            return { minted_supply, fullMint: true };
-        }
         return { minted_supply };
     }
     else {
         throw Error(`fetch ordinals api for ${ticker} failed`);
     }
-};
-
-/**
- * @notice only minted_supply is considered part of supply do not use for max_supply fetch
- * @param address
- * @returns max supply of jetton in wei for interop with erc20 also returs true falg to indita if fully minted
- */
-const _JettonSupply = async (address) => {
-   const tonweb = new TonWeb()
-   const jettonMinter = new TonWeb.token.jetton.JettonMinter(tonweb.provider, {address:address});
-  
 };
 const _BRC20SupplyCached = (0, lib_1.memoize)(_BRC20Supply);
 async function get_BRC20_supply(ticker) {
@@ -219,14 +289,15 @@ async function get_BRC20_supply(ticker) {
     return minted_supply;
 }
 exports.get_BRC20_supply = get_BRC20_supply;
-
-const _JettonSupplyCached = (0, lib_1.memoize)(_JettonSupply);
-async function get_jetton_supply(ticker) {
-    let { minted_supply, fullMint } = await _BRC20SupplyCached(ticker);
-    if (fullMint) {
-        minted_supply = await _BRC20Supply(ticker);
-        return minted_supply;
-    }
-    return minted_supply;
+async function get_jetton_suppply(address) {
+    let totalsupply = await _JettonSupplyCached(address);
+    return totalsupply;
 }
-exports.get_jetton_supply = get_BRC20_supply;
+const _JettonSupply = async (address) => {
+    const tonweb = new tonweb_1.default(new tonweb_1.default.HttpProvider(constants_1.rpcProviders[constants_1.ChainId.TON], { apiKey: constants_1.tonAPIKey }));
+    const jettonMinter = new tonweb_1.default.token.jetton.JettonMinter(tonweb.provider, { address: address });
+    const data = await jettonMinter.getJettonData();
+    const supply = ethers_1.ethers.parseUnits((0, core_1.fromNano)(data.totalSupply.toString()));
+    return supply;
+};
+const _JettonSupplyCached = (0, lib_1.memoize)(_JettonSupply);
