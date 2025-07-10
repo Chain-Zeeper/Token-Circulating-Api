@@ -66,7 +66,6 @@ async function total_supply(token:Token){
         if(!address) throw Error(`address not found for ${token.name} chain ${chain} token.json misconfigured`)
         if(Number.isNaN(Number(chain))){
             let addressToWatch = token.burn_or_bridge?.[chain]    
-            console.log(addressToWatch,"addressToWatch")
             if(chain=='btc'){          
                 if(addressToWatch){ 
                    return await BRC20BalanceBatch(address,addressToWatch)
